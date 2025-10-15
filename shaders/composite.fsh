@@ -39,18 +39,18 @@ void main(){
         bool isNight = worldTime >= 13000 || worldTime < 500;
         
         if (isDay) {
-            // 낮: 약간 흐린 하늘
-            color = mix(color, vec3(0.65, 0.62, 0.58), 0.4);
-            // 약간의 먼지 효과
+            // 낮: 비올 것 같은 흐린 하늘
+            color = mix(color, vec3(0.55, 0.54, 0.52), 0.55);
+            // 먼지/수증기 효과
             float dust = noise(texcoord * 80.0 + frameTimeCounter * 0.008);
-            color += vec3(0.08, 0.07, 0.05) * dust * 0.2;
+            color += vec3(0.06, 0.06, 0.05) * dust * 0.25;
         } else if (isDusk) {
-            // 황혼: 주황빛 하늘
-            color = mix(color, vec3(0.6, 0.4, 0.3), 0.5);
+            // 황혼: 어두운 주황빛 하늘
+            color = mix(color, vec3(0.5, 0.35, 0.25), 0.6);
         } else if (isNight) {
-            // 밤: 어두운 하늘 (방송용으로 약간 밝게)
-            color *= 0.15;
-            color = mix(color, vec3(0.02, 0.02, 0.04), 0.5);
+            // 밤: 확실히 어두운 하늘
+            color *= 0.05;
+            color = mix(color, vec3(0.01, 0.01, 0.02), 0.7);
         }
         gl_FragData[0] = vec4(color, 1.0f);
         return;
@@ -60,33 +60,33 @@ void main(){
     vec3 normal = texture2D(colortex1, texcoord).rgb * 2.0 - 1.0;
     vec3 lightmap = texture2D(colortex2, texcoord).rgb;
     
-    // 플래시라이트 효과 (방송용으로 최적화)
-    float flashlightDepth = min(depth, 30.0); // 최대 거리 30블록
+    // 플래시라이트 효과 (개선된 버전)
+    float flashlightDepth = min(depth, 50.0); // 최대 거리 50블록으로 증가
     float dist = length((texcoord - 0.5) * vec2(max(aspectRatio, 1.0), max(1.0 / aspectRatio, 1.0)));
     
-    // 플래시라이트 범위 (넓고 부드럽게)
-    float flashlight = clamp((1-(dist / (0.65 + flashlightDepth * 0.01)) * 6.0 + 3.0), 0.0, 1.0);
+    // 플래시라이트 범위 (더 넓고 자연스럽게)
+    float flashlight = clamp((1.0 - (dist / (0.8 + flashlightDepth * 0.008)) * 4.5 + 3.5), 0.0, 1.0);
     flashlight = smoothstep(0.0, 1.0, flashlight);
     
-    // 중심부 밝기 (방송용으로 선명하게)
-    float centerBoost = clamp(1.0 - dist * 1.5, 0.0, 1.0);
-    centerBoost = pow(centerBoost, 2.0);
-    flashlight += centerBoost * 0.8;
+    // 중심부 밝기 (더 선명하고 멀리 보이도록)
+    float centerBoost = clamp(1.0 - dist * 1.2, 0.0, 1.0);
+    centerBoost = pow(centerBoost, 1.8);
+    flashlight += centerBoost * 1.2;
     
-    // 거리 감쇠 (부드럽게)
-    flashlight *= clamp(1.0 - flashlightDepth * 0.025, 0.2, 1.0);
-    flashlight *= sqrt(max(normal.z, 0.0)) * 0.7 + 0.3;
+    // 거리 감쇠 (더 멀리까지 보이도록 완화)
+    flashlight *= clamp(1.0 - flashlightDepth * 0.015, 0.3, 1.0);
+    flashlight *= sqrt(max(normal.z, 0.0)) * 0.6 + 0.4;
     
     // 시간대별 플래시라이트 강도
     bool isNight = worldTime >= 13000 || worldTime < 500;
     bool isDusk = (worldTime >= 12000 && worldTime < 13000) || (worldTime >= 500 && worldTime < 1000);
     
     if (isNight) {
-        flashlight *= 2.5; // 밤: 강한 플래시라이트
+        flashlight *= 3.5; // 밤: 매우 강한 플래시라이트로 멀리까지 보임
     } else if (isDusk) {
-        flashlight *= 1.2; // 황혼: 중간 강도
+        flashlight *= 1.8; // 황혼: 중간보다 강한 강도
     } else {
-        flashlight *= 0.4; // 낮: 약한 보조광
+        flashlight *= 0.6; // 낮: 약한 보조광
     }
     
     // 플래시라이트 깜빡임 (방송용으로 약하게)
@@ -100,30 +100,38 @@ void main(){
     
     // 바닐라 조명
     float vanillaLight = lightmap.x;
-    vanillaLight = pow(vanillaLight, 2.5) * 1.0;
+    
+    // 밤에는 바닐라 조명을 더욱 어둡게
+    if (isNight) {
+        vanillaLight = pow(vanillaLight, 4.0) * 0.3; // 밤은 확실히 어둡게
+    } else if (isDusk) {
+        vanillaLight = pow(vanillaLight, 3.0) * 0.7;
+    } else {
+        vanillaLight = pow(vanillaLight, 2.0) * 1.0;
+    }
     
     // 조명 적용
     float finalLight = max(vanillaLight, flashlight);
     color *= finalLight;
     
-    // 안개 효과 (방송용으로 약하게)
-    float fogDist = depth + dist * 2.0 - vanillaLight * 4.0;
-    float fogStrength = (fogDist - 3.0) * 0.08;
-    fogStrength = clamp(fogStrength, 0.0, 0.7); // 최대 70% 안개
+    // 안개 효과
+    float fogDist = depth + dist * 1.5 - vanillaLight * 3.0 - flashlight * 2.0;
+    float fogStrength = (fogDist - 4.0) * 0.1;
+    fogStrength = clamp(fogStrength, 0.0, 0.75);
     
     // 시간대별 안개 색상
     if (isNight) {
-        // 밤 안개 (약간 푸른빛)
-        vec3 nightFogColor = vec3(0.08, 0.08, 0.12);
-        color = mix(color, nightFogColor + flashlight * 0.02, fogStrength * 0.8);
+        // 밤 안개 (매우 어두운 푸른빛, 플래시라이트에 의해서만 보임)
+        vec3 nightFogColor = vec3(0.02, 0.02, 0.04);
+        color = mix(color, nightFogColor + flashlight * 0.01, fogStrength * 0.9);
     } else if (isDusk) {
-        // 황혼 안개
-        vec3 duskFogColor = vec3(0.4, 0.3, 0.25);
-        color = mix(color, duskFogColor, fogStrength * 0.5);
+        // 황혼 안개 (어두운 주황빛)
+        vec3 duskFogColor = vec3(0.35, 0.25, 0.2);
+        color = mix(color, duskFogColor, fogStrength * 0.6);
     } else {
-        // 낮 안개 (황사 느낌)
-        vec3 dustColor = vec3(0.65, 0.58, 0.5);
-        color = mix(color, dustColor, fogStrength * 0.4);
+        // 낮 안개 (비올 것 같은 흐린 느낌)
+        vec3 dustColor = vec3(0.6, 0.58, 0.55);
+        color = mix(color, dustColor, fogStrength * 0.55);
     }
     
     // 회색조 효과 (약하게)
