@@ -2,7 +2,6 @@
 
 varying vec2 texcoord;
 varying vec2 lmcoord;
-varying vec2 LightmapCoords;
 varying vec3 Normal;
 varying vec4 Color;
 
